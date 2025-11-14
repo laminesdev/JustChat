@@ -7,16 +7,14 @@ const app = express();
 
 const corsOptions = {
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-
-        const allowedOrigins = ["http://localhost:5176/"];
+        const allowedOrigins = ["http://localhost:5176"]; 
 
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
             console.log("Blocked by CORS:", origin);
-            callback(null, true); // Allow all origins in development
+            callback(new Error("Not allowed by CORS"));
         }
     },
     credentials: true,
@@ -25,6 +23,8 @@ const corsOptions = {
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 };
 
+app.use(cors(corsOptions));
+app.use(express.json({ limit: "10mb" }));
 
 // Parse JSON bodies
 app.use(express.json({ limit: "10mb" }));

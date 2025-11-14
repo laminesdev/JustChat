@@ -149,6 +149,124 @@ export default cloudinary;
 
 ```
 
+## File: config/constants.js
+```js
+// Socket event names
+export const SocketEvents = {
+    // Connection events
+    CONNECTION: "connection",
+    DISCONNECT: "disconnect",
+    CONNECTION_SUCCESS: "connection_success",
+    ERROR: "error",
+
+    // User events
+    USER_ONLINE: "user_online",
+    USER_OFFLINE: "user_offline",
+    GET_ONLINE_USERS: "get_online_users",
+    PROFILE_UPDATED: "profile_updated",
+    USER_PROFILE_UPDATED: "user_profile_updated",
+
+    // Conversation events
+    JOIN_CONVERSATION: "join_conversation",
+    LEAVE_CONVERSATION: "leave_conversation",
+    CREATE_CONVERSATION: "create_conversation",
+    CONVERSATION_CREATED: "conversation_created",
+    NEW_CONVERSATION: "new_conversation",
+    DELETE_CONVERSATION: "delete_conversation",
+    CONVERSATION_DELETED: "conversation_deleted",
+    CONVERSATION_UPDATED: "conversation_updated",
+    CONVERSATION_USER_UPDATED: "conversation_user_updated",
+
+    // Message events
+    SEND_MESSAGE: "send_message",
+    NEW_MESSAGE: "new_message",
+    MESSAGE_SENT: "message_sent",
+    MESSAGE_DELIVERED: "message_delivered",
+    MESSAGE_READ: "message_read",
+    MARK_AS_READ: "mark_as_read",
+    MARK_ALL_AS_READ: "mark_all_as_read",
+    ALL_MESSAGES_READ: "all_messages_read",
+    EDIT_MESSAGE: "edit_message",
+    MESSAGE_EDITED: "message_edited",
+    DELETE_MESSAGE: "delete_message",
+    MESSAGE_DELETED: "message_deleted",
+
+    // Typing events
+    TYPING_START: "typing_start",
+    TYPING_STOP: "typing_stop",
+    USER_TYPING: "user_typing",
+
+    // Notification events
+    PENDING_CONVERSATIONS: "pending_conversations",
+};
+
+// Message types
+export const MessageTypes = {
+    TEXT: "TEXT",
+    IMAGE: "IMAGE",
+};
+
+// File upload folders
+export const UploadFolders = {
+    PROFILES: "profiles",
+    MESSAGES: "messages",
+    FILES: "files",
+};
+
+// Resource types
+export const ResourceTypes = {
+    IMAGE: "image",
+    RAW: "raw",
+    VIDEO: "video",
+    AUTO: "auto",
+};
+
+// Time constants
+export const TimeConstants = {
+    MESSAGE_EDIT_TIMEOUT: 5 * 60 * 1000, // 5 minutes
+    TYPING_TIMEOUT: 3000, // 3 seconds
+    TOKEN_CLEANUP_INTERVAL: 24 * 60 * 60 * 1000, // 24 hours
+};
+
+// HTTP status codes
+export const HttpStatus = {
+    OK: 200,
+    CREATED: 201,
+    BAD_REQUEST: 400,
+    UNAUTHORIZED: 401,
+    FORBIDDEN: 403,
+    NOT_FOUND: 404,
+    CONFLICT: 409,
+    TOO_MANY_REQUESTS: 429,
+    INTERNAL_SERVER_ERROR: 500,
+    BAD_GATEWAY: 502,
+    SERVICE_UNAVAILABLE: 503,
+    GATEWAY_TIMEOUT: 504,
+};
+
+// User select fields (commonly used)
+export const UserSelectFields = {
+    id: true,
+    email: true,
+    full_name: true,
+    avatar_url: true,
+    is_online: true,
+    last_seen: true,
+    created_at: true,
+};
+
+// Public user fields (exclude sensitive data)
+export const PublicUserFields = {
+    id: true,
+    email: true,
+    full_name: true,
+    avatar_url: true,
+    is_online: true,
+    last_seen: true,
+};
+
+```
+
 ## File: config/database.js
 ```js
 import { PrismaClient } from "@prisma/client";
@@ -293,6 +411,170 @@ export async function executeWithRetry(operation, maxRetries = 3) {
 
     throw lastError;
 }
+
+```
+
+## File: config/env.js
+```js
+import dotenv from "dotenv";
+
+dotenv.config();
+
+class ConfigurationError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = "ConfigurationError";
+    }
+}
+
+// Validate and parse environment variables
+function validateEnv() {
+    const required = [
+        "DATABASE_URL",
+        "JWT_SECRET",
+        "REFRESH_TOKEN_SECRET",
+        "CLOUD_NAME",
+        "CLOUD_API_KEY",
+        "CLOUD_API_SECRET",
+    ];
+
+    const missing = required.filter((key) => !process.env[key]);
+
+    if (missing.length > 0) {
+        throw new ConfigurationError(
+            `Missing required environment variables: ${missing.join(", ")}`
+        );
+    }
+
+    // Validate JWT secrets are strong enough
+    if (process.env.JWT_SECRET.length < 32) {
+        throw new ConfigurationError(
+            "JWT_SECRET must be at least 32 characters long"
+        );
+    }
+
+    if (process.env.REFRESH_TOKEN_SECRET.length < 32) {
+        throw new ConfigurationError(
+            "REFRESH_TOKEN_SECRET must be at least 32 characters long"
+        );
+    }
+}
+
+// Run validation
+try {
+    validateEnv();
+} catch (error) {
+    console.error("Configuration Error:", error.message);
+    process.exit(1);
+}
+
+// Export typed configuration
+export const config = {
+    // Server
+    port: parseInt(process.env.PORT || "3000", 10),
+    nodeEnv: process.env.NODE_ENV || "development",
+
+    // Database
+    database: {
+        url: process.env.DATABASE_URL,
+    },
+
+    // Authentication
+    auth: {
+        jwtSecret: process.env.JWT_SECRET,
+        refreshTokenSecret: process.env.REFRESH_TOKEN_SECRET,
+        accessTokenExpiry: process.env.ACCESS_TOKEN_EXPIRY || "15m",
+        refreshTokenExpiry: process.env.REFRESH_TOKEN_EXPIRY || "30d",
+        bcryptRounds: parseInt(process.env.ROUNDS || "12", 10),
+    },
+
+    // Cloudinary
+    cloudinary: {
+        cloudName: process.env.CLOUD_NAME,
+        apiKey: process.env.CLOUD_API_KEY,
+        apiSecret: process.env.CLOUD_API_SECRET,
+        timeout: 30000,
+    },
+
+    // File Upload
+    upload: {
+        maxImageSize: 5 * 1024 * 1024, // 5MB
+        maxFileSize: 10 * 1024 * 1024, // 10MB
+        allowedImageFormats: ["jpg", "jpeg", "png", "gif", "webp", "bmp"],
+        maxRetries: 2,
+        retryDelay: 1000,
+    },
+
+    // OAuth
+    oauth: {
+        github: {
+            clientId: process.env.GITHUB_CLIENT_ID,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET,
+            callbackUrl:
+                process.env.GITHUB_CALLBACK_URL ||
+                "/api/auth/oauth/github/callback",
+        },
+        client: {
+            url: process.env.CLIENT_URL || "http://localhost:5176",
+            successRedirect:
+                process.env.CLIENT_SUCCESS_REDIRECT || "/oauth-callback",
+            errorRedirect: process.env.CLIENT_ERROR_REDIRECT || "/login",
+        },
+    },
+
+    // WebSocket
+    websocket: {
+        pingTimeout: 60000,
+        pingInterval: 25000,
+        maxDisconnectionDuration: 120000,
+    },
+
+    // Rate Limiting
+    rateLimit: {
+        windowMs: 15 * 60 * 1000, // 15 minutes
+        maxRequests: 100,
+        authWindowMs: 15 * 60 * 1000, // 15 minutes
+        maxAuthRequests: 5,
+        uploadWindowMs: 60 * 1000, // 1 minute
+        maxUploadRequests: 10,
+    },
+
+    // Message constraints
+    message: {
+        maxLength: 1000,
+        editTimeoutMinutes: 5,
+    },
+
+    // Pagination
+    pagination: {
+        defaultLimit: 50,
+        maxLimit: 100,
+    },
+};
+
+// Validate OAuth configuration if being used
+export function validateOAuthConfig() {
+    const warnings = [];
+
+    if (!config.oauth.github.clientId) {
+        warnings.push("GitHub OAuth not configured (GITHUB_CLIENT_ID missing)");
+    }
+
+    if (!config.oauth.github.clientSecret) {
+        warnings.push(
+            "GitHub OAuth not configured (GITHUB_CLIENT_SECRET missing)"
+        );
+    }
+
+    return {
+        isConfigured:
+            !!config.oauth.github.clientId &&
+            !!config.oauth.github.clientSecret,
+        warnings,
+    };
+}
+
+export default config;
 
 ```
 
@@ -2735,6 +3017,277 @@ export const authenticateToken = (req, res, next) => {
 
 ```
 
+## File: middlewares/errorHandler.js
+```js
+import { AppError } from "../utils/errors.js";
+import { logger } from "../utils/logger.js";
+import { HttpStatus } from "../config/constants.js";
+
+export const errorHandler = (err, req, res, next) => {
+    // Log error
+    logger.error("Error occurred", err, {
+        method: req.method,
+        path: req.path,
+        userId: req.user?.userId,
+    });
+
+    // Handle operational errors
+    if (err.isOperational) {
+        return res.status(err.statusCode).json({
+            success: false,
+            msg: err.message,
+            code: err.code,
+            data: null,
+        });
+    }
+
+    // Handle Prisma errors
+    if (err.code && err.code.startsWith("P")) {
+        return handlePrismaError(err, res);
+    }
+
+    // Handle validation errors (from Joi)
+    if (err.isJoi) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+            success: false,
+            msg: "Validation error",
+            code: "VALIDATION_ERROR",
+            data: {
+                details: err.details,
+            },
+        });
+    }
+
+    // Handle JWT errors
+    if (err.name === "JsonWebTokenError") {
+        return res.status(HttpStatus.UNAUTHORIZED).json({
+            success: false,
+            msg: "Invalid token",
+            code: "INVALID_TOKEN",
+            data: null,
+        });
+    }
+
+    if (err.name === "TokenExpiredError") {
+        return res.status(HttpStatus.UNAUTHORIZED).json({
+            success: false,
+            msg: "Token expired",
+            code: "TOKEN_EXPIRED",
+            data: null,
+        });
+    }
+
+    // Handle multer errors
+    if (err.name === "MulterError") {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+            success: false,
+            msg: `File upload error: ${err.message}`,
+            code: "FILE_UPLOAD_ERROR",
+            data: null,
+        });
+    }
+
+    // Default error response (unexpected errors)
+    logger.error("Unexpected error", err);
+
+    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        msg: "Internal server error",
+        code: "INTERNAL_ERROR",
+        data: null,
+    });
+};
+
+function handlePrismaError(err, res) {
+    const errorMap = {
+        P2002: {
+            statusCode: HttpStatus.CONFLICT,
+            message: "A record with this information already exists",
+            code: "DUPLICATE_RECORD",
+        },
+        P2025: {
+            statusCode: HttpStatus.NOT_FOUND,
+            message: "Record not found",
+            code: "RECORD_NOT_FOUND",
+        },
+        P2003: {
+            statusCode: HttpStatus.BAD_REQUEST,
+            message: "Invalid reference to related record",
+            code: "INVALID_REFERENCE",
+        },
+        P2001: {
+            statusCode: HttpStatus.NOT_FOUND,
+            message: "Record not found",
+            code: "RECORD_NOT_FOUND",
+        },
+    };
+
+    const errorInfo = errorMap[err.code] || {
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: "Database error",
+        code: "DATABASE_ERROR",
+    };
+
+    return res.status(errorInfo.statusCode).json({
+        success: false,
+        msg: errorInfo.message,
+        code: errorInfo.code,
+        data: null,
+    });
+}
+
+// Async error wrapper
+export const asyncHandler = (fn) => {
+    return (req, res, next) => {
+        Promise.resolve(fn(req, res, next)).catch(next);
+    };
+};
+
+```
+
+## File: middlewares/rateLimiter.js
+```js
+import { RateLimitError } from "../utils/errors.js";
+import config from "../config/env.js";
+
+// Simple in-memory rate limiter (for production, use Redis)
+class RateLimiter {
+    constructor() {
+        this.requests = new Map(); // key -> { count, resetTime }
+        this.cleanup();
+    }
+
+    cleanup() {
+        // Clean up expired entries every minute
+        setInterval(() => {
+            const now = Date.now();
+            for (const [key, data] of this.requests.entries()) {
+                if (data.resetTime < now) {
+                    this.requests.delete(key);
+                }
+            }
+        }, 60000);
+    }
+
+    check(key, maxRequests, windowMs) {
+        const now = Date.now();
+        const data = this.requests.get(key);
+
+        if (!data || data.resetTime < now) {
+            // First request or window expired
+            this.requests.set(key, {
+                count: 1,
+                resetTime: now + windowMs,
+            });
+            return { allowed: true, remaining: maxRequests - 1 };
+        }
+
+        if (data.count >= maxRequests) {
+            const retryAfter = Math.ceil((data.resetTime - now) / 1000);
+            return {
+                allowed: false,
+                remaining: 0,
+                retryAfter,
+            };
+        }
+
+        data.count++;
+        return {
+            allowed: true,
+            remaining: maxRequests - data.count,
+        };
+    }
+}
+
+const limiter = new RateLimiter();
+
+// General API rate limiter
+export const apiRateLimiter = (req, res, next) => {
+    const key = `api:${req.ip}`;
+    const result = limiter.check(
+        key,
+        config.rateLimit.maxRequests,
+        config.rateLimit.windowMs
+    );
+
+    res.setHeader("X-RateLimit-Limit", config.rateLimit.maxRequests);
+    res.setHeader("X-RateLimit-Remaining", result.remaining);
+
+    if (!result.allowed) {
+        res.setHeader("Retry-After", result.retryAfter);
+        return next(
+            new RateLimitError("Too many requests, please try again later")
+        );
+    }
+
+    next();
+};
+
+// Auth-specific rate limiter (stricter)
+export const authRateLimiter = (req, res, next) => {
+    const key = `auth:${req.ip}`;
+    const result = limiter.check(
+        key,
+        config.rateLimit.maxAuthRequests,
+        config.rateLimit.authWindowMs
+    );
+
+    res.setHeader("X-RateLimit-Limit", config.rateLimit.maxAuthRequests);
+    res.setHeader("X-RateLimit-Remaining", result.remaining);
+
+    if (!result.allowed) {
+        res.setHeader("Retry-After", result.retryAfter);
+        return next(
+            new RateLimitError(
+                "Too many authentication attempts, please try again later"
+            )
+        );
+    }
+
+    next();
+};
+
+// Upload rate limiter
+export const uploadRateLimiter = (req, res, next) => {
+    const userId = req.user?.userId || req.ip;
+    const key = `upload:${userId}`;
+    const result = limiter.check(
+        key,
+        config.rateLimit.maxUploadRequests,
+        config.rateLimit.uploadWindowMs
+    );
+
+    res.setHeader("X-RateLimit-Limit", config.rateLimit.maxUploadRequests);
+    res.setHeader("X-RateLimit-Remaining", result.remaining);
+
+    if (!result.allowed) {
+        res.setHeader("Retry-After", result.retryAfter);
+        return next(
+            new RateLimitError(
+                "Too many upload requests, please try again later"
+            )
+        );
+    }
+
+    next();
+};
+
+// Socket event rate limiter
+export class SocketRateLimiter {
+    constructor() {
+        this.limiter = new RateLimiter();
+    }
+
+    check(userId, event, maxEvents = 20, windowMs = 10000) {
+        const key = `socket:${userId}:${event}`;
+        return this.limiter.check(key, maxEvents, windowMs);
+    }
+}
+
+export const socketRateLimiter = new SocketRateLimiter();
+
+```
+
 ## File: middlewares/socketAuth.js
 ```js
 import { tokenService } from "../services/tokenService.js";
@@ -4816,6 +5369,163 @@ export const logoutAllDevicesService = async (userId) => {
 
 ```
 
+## File: services/connectionService.js
+```js
+import { getIO } from "../config/socket.js";
+import { SocketEvents } from "../config/constants.js";
+
+// Store multiple connections per user
+const userConnections = new Map(); // userId -> Set of socketIds
+const socketToUser = new Map(); // socketId -> userId
+
+export const connectionService = {
+    // Add a connection for a user
+    addConnection(userId, socketId, user) {
+        if (!userConnections.has(userId)) {
+            userConnections.set(userId, new Set());
+        }
+
+        userConnections.get(userId).add(socketId);
+        socketToUser.set(socketId, userId);
+
+        console.log(
+            `User ${userId} connected with socket ${socketId}. Total connections: ${
+                userConnections.get(userId).size
+            }`
+        );
+
+        return {
+            isFirstConnection: userConnections.get(userId).size === 1,
+            connectionCount: userConnections.get(userId).size,
+        };
+    },
+
+    // Remove a connection
+    removeConnection(socketId) {
+        const userId = socketToUser.get(socketId);
+
+        if (!userId) {
+            return { userId: null, isLastConnection: false };
+        }
+
+        const connections = userConnections.get(userId);
+        if (connections) {
+            connections.delete(socketId);
+
+            const isLastConnection = connections.size === 0;
+
+            if (isLastConnection) {
+                userConnections.delete(userId);
+            }
+
+            console.log(
+                `User ${userId} disconnected socket ${socketId}. Remaining connections: ${connections.size}`
+            );
+
+            socketToUser.delete(socketId);
+
+            return {
+                userId,
+                isLastConnection,
+                connectionCount: connections.size,
+            };
+        }
+
+        socketToUser.delete(socketId);
+        return { userId, isLastConnection: true, connectionCount: 0 };
+    },
+
+    // Check if user is online (has at least one connection)
+    isUserOnline(userId) {
+        const connections = userConnections.get(userId);
+        return connections && connections.size > 0;
+    },
+
+    // Get all socket IDs for a user
+    getUserSockets(userId) {
+        const connections = userConnections.get(userId);
+        return connections ? Array.from(connections) : [];
+    },
+
+    // Get socket instance for a user (returns first available)
+    getUserSocket(userId) {
+        const socketIds = this.getUserSockets(userId);
+        if (socketIds.length === 0) return null;
+
+        const io = getIO();
+        return io.sockets.sockets.get(socketIds[0]);
+    },
+
+    // Get all socket instances for a user
+    getAllUserSockets(userId) {
+        const socketIds = this.getUserSockets(userId);
+        const io = getIO();
+
+        return socketIds
+            .map((id) => io.sockets.sockets.get(id))
+            .filter((socket) => socket !== undefined);
+    },
+
+    // Send event to all user's connections
+    sendToUser(userId, event, data) {
+        const sockets = this.getAllUserSockets(userId);
+        sockets.forEach((socket) => socket.emit(event, data));
+        return sockets.length > 0;
+    },
+
+    // Send event to a specific conversation
+    sendToConversation(conversationId, event, data, excludeSocketId = null) {
+        const io = getIO();
+        const room = `conversation:${conversationId}`;
+
+        if (excludeSocketId) {
+            io.to(room).except(excludeSocketId).emit(event, data);
+        } else {
+            io.to(room).emit(event, data);
+        }
+    },
+
+    // Get all online users
+    getOnlineUsers() {
+        return Array.from(userConnections.keys());
+    },
+
+    // Get connection info for a user
+    getUserConnectionInfo(userId) {
+        const connections = userConnections.get(userId);
+        if (!connections) return null;
+
+        return {
+            userId,
+            connectionCount: connections.size,
+            isOnline: connections.size > 0,
+            socketIds: Array.from(connections),
+        };
+    },
+
+    // Get total connection count
+    getTotalConnections() {
+        let total = 0;
+        userConnections.forEach((connections) => {
+            total += connections.size;
+        });
+        return total;
+    },
+
+    // Get user ID from socket ID
+    getUserIdFromSocket(socketId) {
+        return socketToUser.get(socketId);
+    },
+
+    // Clear all connections (for cleanup/restart)
+    clearAllConnections() {
+        userConnections.clear();
+        socketToUser.clear();
+    },
+};
+
+```
+
 ## File: services/conversationService.js
 ```js
 import { conversationRepository } from "../repositories/conversationRepository.js";
@@ -5943,6 +6653,118 @@ export const handleOAuthError = (res, error) => {
 
 ```
 
+## File: utils/errors.js
+```js
+// Custom error classes for better error handling
+export class AppError extends Error {
+    constructor(message, statusCode, code) {
+        super(message);
+        this.statusCode = statusCode;
+        this.code = code;
+        this.isOperational = true;
+        Error.captureStackTrace(this, this.constructor);
+    }
+}
+
+export class ValidationError extends AppError {
+    constructor(message, details = null) {
+        super(message, 400, "VALIDATION_ERROR");
+        this.details = details;
+    }
+}
+
+export class AuthenticationError extends AppError {
+    constructor(message = "Authentication failed") {
+        super(message, 401, "AUTHENTICATION_ERROR");
+    }
+}
+
+export class AuthorizationError extends AppError {
+    constructor(message = "Access denied") {
+        super(message, 403, "AUTHORIZATION_ERROR");
+    }
+}
+
+export class NotFoundError extends AppError {
+    constructor(resource = "Resource") {
+        super(`${resource} not found`, 404, "NOT_FOUND");
+        this.resource = resource;
+    }
+}
+
+export class ConflictError extends AppError {
+    constructor(message = "Resource already exists") {
+        super(message, 409, "CONFLICT_ERROR");
+    }
+}
+
+export class ExternalServiceError extends AppError {
+    constructor(service, message = "External service error") {
+        super(message, 502, "EXTERNAL_SERVICE_ERROR");
+        this.service = service;
+    }
+}
+
+export class RateLimitError extends AppError {
+    constructor(message = "Too many requests") {
+        super(message, 429, "RATE_LIMIT_ERROR");
+    }
+}
+
+export class FileUploadError extends AppError {
+    constructor(message, code = "FILE_UPLOAD_ERROR") {
+        super(message, 400, code);
+    }
+}
+
+// Error code constants
+export const ErrorCodes = {
+    // Auth errors
+    USER_ALREADY_EXISTS: "USER_ALREADY_EXISTS",
+    INVALID_CREDENTIALS: "INVALID_CREDENTIALS",
+    TOKEN_EXPIRED: "TOKEN_EXPIRED",
+    TOKEN_INVALID: "TOKEN_INVALID",
+    REFRESH_TOKEN_REQUIRED: "REFRESH_TOKEN_REQUIRED",
+
+    // User errors
+    USER_NOT_FOUND: "USER_NOT_FOUND",
+    CURRENT_PASSWORD_REQUIRED: "CURRENT_PASSWORD_REQUIRED",
+    INVALID_CURRENT_PASSWORD: "INVALID_CURRENT_PASSWORD",
+    SEARCH_QUERY_REQUIRED: "SEARCH_QUERY_REQUIRED",
+    SEARCH_QUERY_TOO_SHORT: "SEARCH_QUERY_TOO_SHORT",
+
+    // Conversation errors
+    CONVERSATION_ALREADY_EXISTS: "CONVERSATION_ALREADY_EXISTS",
+    CONVERSATION_NOT_FOUND: "CONVERSATION_NOT_FOUND",
+
+    // Message errors
+    MESSAGE_NOT_FOUND: "MESSAGE_NOT_FOUND",
+    MESSAGE_TEXT_REQUIRED: "MESSAGE_TEXT_REQUIRED",
+    MESSAGE_NOT_EDITABLE: "MESSAGE_NOT_EDITABLE",
+    MESSAGE_EDIT_TIMEOUT: "MESSAGE_EDIT_TIMEOUT",
+    CANNOT_MARK_OWN_MESSAGE_READ: "CANNOT_MARK_OWN_MESSAGE_READ",
+    FILE_URL_REQUIRED: "FILE_URL_REQUIRED",
+    INVALID_MESSAGE_TYPE: "INVALID_MESSAGE_TYPE",
+
+    // File upload errors
+    FILE_TOO_LARGE: "FILE_TOO_LARGE",
+    INVALID_FILE_FORMAT: "INVALID_FILE_FORMAT",
+    UPLOAD_FAILED: "UPLOAD_FAILED",
+    UPLOAD_TIMEOUT: "UPLOAD_TIMEOUT",
+    DELETE_FAILED: "DELETE_FAILED",
+
+    // OAuth errors
+    EMAIL_REQUIRED_FOR_OAUTH: "EMAIL_REQUIRED_FOR_OAUTH",
+    OAUTH_PROVIDER_ERROR: "OAUTH_PROVIDER_ERROR",
+    MISSING_OAUTH_CONFIG: "MISSING_OAUTH_CONFIG",
+
+    // Database errors
+    DATABASE_ERROR: "DATABASE_ERROR",
+    TRANSACTION_FAILED: "TRANSACTION_FAILED",
+};
+
+```
+
 ## File: utils/jwt.js
 ```js
 import jwt from "jsonwebtoken";
@@ -5966,6 +6788,124 @@ export const verifyAccessToken = (token) => {
 export const verifyRefreshToken = (token) => {
     return jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
 };
+
+```
+
+## File: utils/logger.js
+```js
+import config from "../config/env.js";
+
+// Log levels
+const LogLevels = {
+    ERROR: "ERROR",
+    WARN: "WARN",
+    INFO: "INFO",
+    DEBUG: "DEBUG",
+};
+
+const logLevelPriority = {
+    ERROR: 0,
+    WARN: 1,
+    INFO: 2,
+    DEBUG: 3,
+};
+
+class Logger {
+    constructor() {
+        this.level =
+            config.nodeEnv === "production" ? LogLevels.INFO : LogLevels.DEBUG;
+    }
+
+    shouldLog(level) {
+        return logLevelPriority[level] <= logLevelPriority[this.level];
+    }
+
+    formatMessage(level, message, meta = {}) {
+        const timestamp = new Date().toISOString();
+        const metaStr =
+            Object.keys(meta).length > 0 ? JSON.stringify(meta) : "";
+
+        return `[${timestamp}] [${level}] ${message} ${metaStr}`;
+    }
+
+    error(message, error = null, meta = {}) {
+        if (!this.shouldLog(LogLevels.ERROR)) return;
+
+        const errorMeta = error
+            ? {
+                  ...meta,
+                  error: {
+                      message: error.message,
+                      stack: error.stack,
+                      code: error.code,
+                  },
+              }
+            : meta;
+
+        console.error(this.formatMessage(LogLevels.ERROR, message, errorMeta));
+    }
+
+    warn(message, meta = {}) {
+        if (!this.shouldLog(LogLevels.WARN)) return;
+        console.warn(this.formatMessage(LogLevels.WARN, message, meta));
+    }
+
+    info(message, meta = {}) {
+        if (!this.shouldLog(LogLevels.INFO)) return;
+        console.log(this.formatMessage(LogLevels.INFO, message, meta));
+    }
+
+    debug(message, meta = {}) {
+        if (!this.shouldLog(LogLevels.DEBUG)) return;
+        console.log(this.formatMessage(LogLevels.DEBUG, message, meta));
+    }
+
+    // Specific log methods for common scenarios
+    authLog(action, userId, success, meta = {}) {
+        this.info(`Auth: ${action}`, {
+            userId,
+            success,
+            ...meta,
+        });
+    }
+
+    socketLog(event, userId, socketId, meta = {}) {
+        this.debug(`Socket: ${event}`, {
+            userId,
+            socketId,
+            ...meta,
+        });
+    }
+
+    dbLog(operation, table, success, meta = {}) {
+        this.debug(`DB: ${operation} on ${table}`, {
+            success,
+            ...meta,
+        });
+    }
+
+    apiLog(method, path, statusCode, duration, meta = {}) {
+        const level =
+            statusCode >= 500
+                ? LogLevels.ERROR
+                : statusCode >= 400
+                ? LogLevels.WARN
+                : LogLevels.INFO;
+
+        const message = `${method} ${path} ${statusCode} ${duration}ms`;
+
+        if (level === LogLevels.ERROR) {
+            this.error(message, null, meta);
+        } else if (level === LogLevels.WARN) {
+            this.warn(message, meta);
+        } else {
+            this.info(message, meta);
+        }
+    }
+}
+
+export const logger = new Logger();
+export default logger;
 
 ```
 
