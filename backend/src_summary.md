@@ -12,9 +12,13 @@ const app = express();
 const corsOptions = {
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
-        const allowedOrigins = ["http://localhost:5176"]; 
 
-        if (allowedOrigins.indexOf(origin) !== -1) {
+        const allowedOrigins = [
+            "http://localhost:5176",
+            process.env.CLIENT_URL,
+        ].filter(Boolean);
+
+        if (allowedOrigins.some((allowed) => origin.startsWith(allowed))) {
             callback(null, true);
         } else {
             console.log("Blocked by CORS:", origin);
@@ -28,9 +32,8 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: "10mb" }));
 
-// Parse JSON bodies
+// Parse JSON bodies - REMOVED DUPLICATE
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
@@ -278,7 +281,7 @@ const prisma = new PrismaClient({
             ? ["query", "error", "warn"]
             : ["error"],
     errorFormat: "minimal",
-    // Connection pool optimization
+    // Connection pool optimization for Neon
     transactionOptions: {
         maxWait: 10000, // 10 seconds
         timeout: 30000, // 30 seconds
@@ -436,6 +439,11 @@ function validateEnv() {
         "CLOUD_NAME",
         "CLOUD_API_KEY",
         "CLOUD_API_SECRET",
+        "CLIENT_URL", // ADDED
+        "CLIENT_SUCCESS_REDIRECT", // ADDED
+        "CLIENT_ERROR_REDIRECT", // ADDED
+        "GITHUB_CLIENT_ID", // ADDED
+        "GITHUB_CLIENT_SECRET", // ADDED
     ];
 
     const missing = required.filter((key) => !process.env[key]);
@@ -456,6 +464,13 @@ function validateEnv() {
     if (process.env.REFRESH_TOKEN_SECRET.length < 32) {
         throw new ConfigurationError(
             "REFRESH_TOKEN_SECRET must be at least 32 characters long"
+        );
+    }
+
+    // Validate URLs
+    if (process.env.CLIENT_URL && !process.env.CLIENT_URL.startsWith("http")) {
+        throw new ConfigurationError(
+            "CLIENT_URL must be a valid URL starting with http:// or https://"
         );
     }
 }
@@ -666,6 +681,7 @@ export function initializeSocket(server) {
 
     setupSocketMiddleware();
     setupConnectionHandlers();
+    setupCleanupInterval();
 
     console.log("Socket.io server initialized");
     return io;
@@ -682,6 +698,29 @@ export function getIO() {
 // Socket middleware setup
 function setupSocketMiddleware() {
     io.use(socketAuthMiddleware);
+}
+
+// Clean up disconnected users periodically
+function setupCleanupInterval() {
+    setInterval(cleanupDisconnectedUsers, 5 * 60 * 1000); // Every 5 minutes
+}
+
+function cleanupDisconnectedUsers() {
+    const now = new Date();
+    let cleanedCount = 0;
+
+    for (const [userId, connection] of connectedUsers.entries()) {
+        const socket = io.sockets.sockets.get(connection.socketId);
+        if (!socket || !socket.connected) {
+            connectedUsers.delete(userId);
+            cleanedCount++;
+            console.log(`Cleaned up disconnected user: ${userId}`);
+        }
+    }
+
+    if (cleanedCount > 0) {
+        console.log(`Cleaned up ${cleanedCount} disconnected users`);
+    }
 }
 
 // Main connection handler
@@ -5878,6 +5917,14 @@ export const createMessageService = async (messageData) => {
         throw new Error("INVALID_MESSAGE_TYPE");
     }
 
+    // Check if recipient is online for immediate delivery status
+    const otherUserId =
+        conversation.user1_id === sender_id
+            ? conversation.user2_id
+            : conversation.user1_id;
+    const isRecipientOnline = connectedUsers.has(otherUserId);
+
+    // Create message with correct delivery status
     const message = await messageRepository.create({
         conversation_id,
         sender_id,
@@ -5887,29 +5934,19 @@ export const createMessageService = async (messageData) => {
         file_name,
         file_size,
         file_type,
-        is_delivered: false, // Will be updated in real-time if recipient is online
+        is_delivered: isRecipientOnline, // Set immediately based on online status
+        delivered_at: isRecipientOnline ? new Date() : null,
     });
-
-    // Check if recipient is online and update delivery status immediately
-    const otherUserId =
-        conversation.user1_id === sender_id
-            ? conversation.user2_id
-            : conversation.user1_id;
-    const isRecipientOnline = connectedUsers.has(otherUserId);
-
-    if (isRecipientOnline) {
-        // Mark as delivered immediately
-        await messageRepository.markAsDelivered(conversation_id, otherUserId);
-
-        // Update the message object to reflect delivery status
-        message.is_delivered = true;
-        message.delivered_at = new Date();
-    }
 
     return message;
 };
 
-export const getMessagesService = async (conversation_id, user_id, page = 1, limit = 50) => {
+export const getMessagesService = async (
+    conversation_id,
+    user_id,
+    page = 1,
+    limit = 50
+) => {
     const conversation = await conversationRepository.findByIdWithAccess(
         conversation_id,
         user_id
@@ -5929,7 +5966,10 @@ export const getMessagesService = async (conversation_id, user_id, page = 1, lim
 };
 
 export const getMessageService = async (message_id, user_id) => {
-    const message = await messageRepository.findByIdWithAccess(message_id, user_id);
+    const message = await messageRepository.findByIdWithAccess(
+        message_id,
+        user_id
+    );
     if (!message) {
         throw new Error("MESSAGE_NOT_FOUND");
     }
@@ -5937,8 +5977,11 @@ export const getMessageService = async (message_id, user_id) => {
 };
 
 export const updateMessageService = async (message_id, user_id, updateData) => {
-    const message = await messageRepository.findByIdWithAccess(message_id, user_id);
-    
+    const message = await messageRepository.findByIdWithAccess(
+        message_id,
+        user_id
+    );
+
     if (!message) {
         throw new Error("MESSAGE_NOT_FOUND");
     }
@@ -5965,8 +6008,11 @@ export const updateMessageService = async (message_id, user_id, updateData) => {
 };
 
 export const deleteMessageService = async (message_id, user_id) => {
-    const message = await messageRepository.findByIdWithAccess(message_id, user_id);
-    
+    const message = await messageRepository.findByIdWithAccess(
+        message_id,
+        user_id
+    );
+
     if (!message) {
         throw new Error("MESSAGE_NOT_FOUND");
     }
@@ -5980,8 +6026,11 @@ export const deleteMessageService = async (message_id, user_id) => {
 };
 
 export const markAsReadService = async (message_id, reader_id) => {
-    const message = await messageRepository.findByIdWithAccess(message_id, reader_id);
-    
+    const message = await messageRepository.findByIdWithAccess(
+        message_id,
+        reader_id
+    );
+
     if (!message) {
         throw new Error("MESSAGE_NOT_FOUND");
     }
@@ -6008,7 +6057,10 @@ export const getUnreadCountService = async (conversation_id, user_id) => {
         throw new Error("CONVERSATION_NOT_FOUND");
     }
 
-    const unread_count = await messageRepository.countUnread(conversation_id, user_id);
+    const unread_count = await messageRepository.countUnread(
+        conversation_id,
+        user_id
+    );
     return { unread_count };
 };
 
@@ -6021,8 +6073,14 @@ export const markAllAsReadService = async (conversation_id, user_id) => {
         throw new Error("CONVERSATION_NOT_FOUND");
     }
 
-    const result = await messageRepository.markAllAsRead(conversation_id, user_id);
-    const unread_count = await messageRepository.getUnreadCountAfterMark(conversation_id, user_id);
+    const result = await messageRepository.markAllAsRead(
+        conversation_id,
+        user_id
+    );
+    const unread_count = await messageRepository.getUnreadCountAfterMark(
+        conversation_id,
+        user_id
+    );
 
     return {
         marked_count: result.marked_count,
@@ -6031,6 +6089,7 @@ export const markAllAsReadService = async (conversation_id, user_id) => {
         conversation,
     };
 };
+
 ```
 
 ## File: services/oauthService.js

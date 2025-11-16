@@ -132,6 +132,8 @@ export const handleTokenError = (res, error) => {
             unauthorizedResponse(res, "Invalid refresh token"),
         REFRESH_TOKEN_EXPIRED: () =>
             unauthorizedResponse(res, "Refresh token expired"),
+        TOKEN_SERVICE_ERROR: () =>
+            errorResponse(res, "Token service error", 500),
     };
 
     const handler = errorMap[error.message];

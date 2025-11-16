@@ -20,16 +20,47 @@ export const tokenService = {
         if (!refreshToken) {
             throw new Error("REFRESH_TOKEN_REQUIRED");
         }
-        const decoded = verifyRefreshToken(refreshToken);
-        const validity = await tokenRepository.verifyTokenValidity(
-            refreshToken
-        );
-        if (!validity.valid) {
-            throw new Error(validity.reason);
-        }
-        const accessToken = generateAccessToken(decoded.userId);
 
-        return { accessToken };
+        try {
+            // First verify the JWT structure
+            const decoded = verifyRefreshToken(refreshToken);
+
+            // Then check if it exists in database and is valid
+            const validity = await tokenRepository.verifyTokenValidity(
+                refreshToken
+            );
+
+            if (!validity.valid) {
+                throw new Error(validity.reason);
+            }
+
+            const accessToken = generateAccessToken(decoded.userId);
+            return { accessToken };
+        } catch (error) {
+            console.error("Token refresh error:", error.message);
+
+            // Handle JWT verification errors
+            if (error.name === "JsonWebTokenError") {
+                throw new Error("INVALID_REFRESH_TOKEN");
+            }
+            if (error.name === "TokenExpiredError") {
+                throw new Error("REFRESH_TOKEN_EXPIRED");
+            }
+
+            // Re-throw our custom errors
+            if (
+                error.message === "REFRESH_TOKEN_REQUIRED" ||
+                error.message === "TOKEN_NOT_FOUND" ||
+                error.message === "TOKEN_EXPIRED" ||
+                error.message === "INVALID_REFRESH_TOKEN" ||
+                error.message === "REFRESH_TOKEN_EXPIRED"
+            ) {
+                throw error;
+            }
+
+            // For any unexpected errors
+            throw new Error("TOKEN_SERVICE_ERROR");
+        }
     },
 
     revokeToken: async (token) => {
