@@ -18,6 +18,11 @@ function validateEnv() {
         "CLOUD_NAME",
         "CLOUD_API_KEY",
         "CLOUD_API_SECRET",
+        "CLIENT_URL", // ADDED
+        "CLIENT_SUCCESS_REDIRECT", // ADDED
+        "CLIENT_ERROR_REDIRECT", // ADDED
+        "GITHUB_CLIENT_ID", // ADDED
+        "GITHUB_CLIENT_SECRET", // ADDED
     ];
 
     const missing = required.filter((key) => !process.env[key]);
@@ -38,6 +43,13 @@ function validateEnv() {
     if (process.env.REFRESH_TOKEN_SECRET.length < 32) {
         throw new ConfigurationError(
             "REFRESH_TOKEN_SECRET must be at least 32 characters long"
+        );
+    }
+
+    // Validate URLs
+    if (process.env.CLIENT_URL && !process.env.CLIENT_URL.startsWith("http")) {
+        throw new ConfigurationError(
+            "CLIENT_URL must be a valid URL starting with http:// or https://"
         );
     }
 }

@@ -7,7 +7,7 @@ const prisma = new PrismaClient({
             ? ["query", "error", "warn"]
             : ["error"],
     errorFormat: "minimal",
-    // Connection pool optimization
+    // Connection pool optimization for Neon
     transactionOptions: {
         maxWait: 10000, // 10 seconds
         timeout: 30000, // 30 seconds

@@ -11,16 +11,14 @@ const app = express();
 
 const corsOptions = {
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-
-        const allowedOrigins = ["http://localhost:5176/"];
+        const allowedOrigins = ["http://localhost:5176"]; 
 
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
             console.log("Blocked by CORS:", origin);
-            callback(null, true); // Allow all origins in development
+            callback(new Error("Not allowed by CORS"));
         }
     },
     credentials: true,
@@ -29,6 +27,8 @@ const corsOptions = {
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 };
 
+app.use(cors(corsOptions));
+app.use(express.json({ limit: "10mb" }));
 
 // Parse JSON bodies
 app.use(express.json({ limit: "10mb" }));
@@ -5219,12 +5219,11 @@ export default router;
 ```js
 import app from "./app.js";
 import dotenv from "dotenv";
+// Load environment variables
+dotenv.config();
 import { connectDb } from "./config/database.js";
 import { testCloudinary } from "./config/cloudinary.js";
 import { initializeSocket } from "./config/socket.js";
-
-// Load environment variables
-dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 
@@ -5910,9 +5909,128 @@ export const createMessageService = async (messageData) => {
     return message;
 };
 
-// ... rest of your existing messageService.js code remains the same ...
-// (getMessagesService, getMessageService, updateMessageService, deleteMessageService, etc.)
+export const getMessagesService = async (conversation_id, user_id, page = 1, limit = 50) => {
+    const conversation = await conversationRepository.findByIdWithAccess(
+        conversation_id,
+        user_id
+    );
+    if (!conversation) {
+        throw new Error("CONVERSATION_NOT_FOUND_OR_ACCESS_DENIED");
+    }
 
+    const skip = (page - 1) * limit;
+    const messages = await messageRepository.findByConversation(
+        conversation_id,
+        skip,
+        limit
+    );
+
+    return messages;
+};
+
+export const getMessageService = async (message_id, user_id) => {
+    const message = await messageRepository.findByIdWithAccess(message_id, user_id);
+    if (!message) {
+        throw new Error("MESSAGE_NOT_FOUND");
+    }
+    return message;
+};
+
+export const updateMessageService = async (message_id, user_id, updateData) => {
+    const message = await messageRepository.findByIdWithAccess(message_id, user_id);
+    
+    if (!message) {
+        throw new Error("MESSAGE_NOT_FOUND");
+    }
+
+    if (message.sender_id !== user_id) {
+        throw new Error("MESSAGE_NOT_FOUND_OR_NOT_EDITABLE");
+    }
+
+    if (message.message_type !== "TEXT") {
+        throw new Error("ONLY_TEXT_MESSAGES_CAN_BE_EDITED");
+    }
+
+    // Check if message is within edit timeout (5 minutes)
+    const editTimeout = 5 * 60 * 1000;
+    if (Date.now() - new Date(message.created_at).getTime() > editTimeout) {
+        throw new Error("MESSAGE_EDIT_TIMEOUT");
+    }
+
+    const updatedMessage = await messageRepository.update(message_id, {
+        message_text: updateData.message_text,
+    });
+
+    return updatedMessage;
+};
+
+export const deleteMessageService = async (message_id, user_id) => {
+    const message = await messageRepository.findByIdWithAccess(message_id, user_id);
+    
+    if (!message) {
+        throw new Error("MESSAGE_NOT_FOUND");
+    }
+
+    if (message.sender_id !== user_id) {
+        throw new Error("MESSAGE_NOT_FOUND_OR_NOT_DELETABLE");
+    }
+
+    await messageRepository.delete(message_id);
+    return message;
+};
+
+export const markAsReadService = async (message_id, reader_id) => {
+    const message = await messageRepository.findByIdWithAccess(message_id, reader_id);
+    
+    if (!message) {
+        throw new Error("MESSAGE_NOT_FOUND");
+    }
+
+    if (message.sender_id === reader_id) {
+        throw new Error("CANNOT_MARK_OWN_MESSAGE_READ");
+    }
+
+    const readReceipt = await readReceiptRepository.upsert({
+        message_id,
+        reader_id,
+        read_at: new Date(),
+    });
+
+    return { ...readReceipt, message };
+};
+
+export const getUnreadCountService = async (conversation_id, user_id) => {
+    const conversation = await conversationRepository.findByIdWithAccess(
+        conversation_id,
+        user_id
+    );
+    if (!conversation) {
+        throw new Error("CONVERSATION_NOT_FOUND");
+    }
+
+    const unread_count = await messageRepository.countUnread(conversation_id, user_id);
+    return { unread_count };
+};
+
+export const markAllAsReadService = async (conversation_id, user_id) => {
+    const conversation = await conversationRepository.findByIdWithAccess(
+        conversation_id,
+        user_id
+    );
+    if (!conversation) {
+        throw new Error("CONVERSATION_NOT_FOUND");
+    }
+
+    const result = await messageRepository.markAllAsRead(conversation_id, user_id);
+    const unread_count = await messageRepository.getUnreadCountAfterMark(conversation_id, user_id);
+
+    return {
+        marked_count: result.marked_count,
+        unread_count,
+        has_unread_messages: unread_count > 0,
+        conversation,
+    };
+};
 ```
 
 ## File: services/oauthService.js

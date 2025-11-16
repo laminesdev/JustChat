@@ -32,6 +32,7 @@ export function initializeSocket(server) {
 
     setupSocketMiddleware();
     setupConnectionHandlers();
+    setupCleanupInterval();
 
     console.log("Socket.io server initialized");
     return io;
@@ -48,6 +49,29 @@ export function getIO() {
 // Socket middleware setup
 function setupSocketMiddleware() {
     io.use(socketAuthMiddleware);
+}
+
+// Clean up disconnected users periodically
+function setupCleanupInterval() {
+    setInterval(cleanupDisconnectedUsers, 5 * 60 * 1000); // Every 5 minutes
+}
+
+function cleanupDisconnectedUsers() {
+    const now = new Date();
+    let cleanedCount = 0;
+
+    for (const [userId, connection] of connectedUsers.entries()) {
+        const socket = io.sockets.sockets.get(connection.socketId);
+        if (!socket || !socket.connected) {
+            connectedUsers.delete(userId);
+            cleanedCount++;
+            console.log(`Cleaned up disconnected user: ${userId}`);
+        }
+    }
+
+    if (cleanedCount > 0) {
+        console.log(`Cleaned up ${cleanedCount} disconnected users`);
+    }
 }
 
 // Main connection handler

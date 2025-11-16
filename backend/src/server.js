@@ -1,11 +1,10 @@
 import app from "./app.js";
 import dotenv from "dotenv";
+// Load environment variables
+dotenv.config();
 import { connectDb } from "./config/database.js";
 import { testCloudinary } from "./config/cloudinary.js";
 import { initializeSocket } from "./config/socket.js";
-
-// Load environment variables
-dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 

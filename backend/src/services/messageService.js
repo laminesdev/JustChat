@@ -40,6 +40,14 @@ export const createMessageService = async (messageData) => {
         throw new Error("INVALID_MESSAGE_TYPE");
     }
 
+    // Check if recipient is online for immediate delivery status
+    const otherUserId =
+        conversation.user1_id === sender_id
+            ? conversation.user2_id
+            : conversation.user1_id;
+    const isRecipientOnline = connectedUsers.has(otherUserId);
+
+    // Create message with correct delivery status
     const message = await messageRepository.create({
         conversation_id,
         sender_id,
@@ -49,29 +57,19 @@ export const createMessageService = async (messageData) => {
         file_name,
         file_size,
         file_type,
-        is_delivered: false, // Will be updated in real-time if recipient is online
+        is_delivered: isRecipientOnline, // Set immediately based on online status
+        delivered_at: isRecipientOnline ? new Date() : null,
     });
-
-    // Check if recipient is online and update delivery status immediately
-    const otherUserId =
-        conversation.user1_id === sender_id
-            ? conversation.user2_id
-            : conversation.user1_id;
-    const isRecipientOnline = connectedUsers.has(otherUserId);
-
-    if (isRecipientOnline) {
-        // Mark as delivered immediately
-        await messageRepository.markAsDelivered(conversation_id, otherUserId);
-
-        // Update the message object to reflect delivery status
-        message.is_delivered = true;
-        message.delivered_at = new Date();
-    }
 
     return message;
 };
 
-export const getMessagesService = async (conversation_id, user_id, page = 1, limit = 50) => {
+export const getMessagesService = async (
+    conversation_id,
+    user_id,
+    page = 1,
+    limit = 50
+) => {
     const conversation = await conversationRepository.findByIdWithAccess(
         conversation_id,
         user_id
@@ -91,7 +89,10 @@ export const getMessagesService = async (conversation_id, user_id, page = 1, lim
 };
 
 export const getMessageService = async (message_id, user_id) => {
-    const message = await messageRepository.findByIdWithAccess(message_id, user_id);
+    const message = await messageRepository.findByIdWithAccess(
+        message_id,
+        user_id
+    );
     if (!message) {
         throw new Error("MESSAGE_NOT_FOUND");
     }
@@ -99,8 +100,11 @@ export const getMessageService = async (message_id, user_id) => {
 };
 
 export const updateMessageService = async (message_id, user_id, updateData) => {
-    const message = await messageRepository.findByIdWithAccess(message_id, user_id);
-    
+    const message = await messageRepository.findByIdWithAccess(
+        message_id,
+        user_id
+    );
+
     if (!message) {
         throw new Error("MESSAGE_NOT_FOUND");
     }
@@ -127,8 +131,11 @@ export const updateMessageService = async (message_id, user_id, updateData) => {
 };
 
 export const deleteMessageService = async (message_id, user_id) => {
-    const message = await messageRepository.findByIdWithAccess(message_id, user_id);
-    
+    const message = await messageRepository.findByIdWithAccess(
+        message_id,
+        user_id
+    );
+
     if (!message) {
         throw new Error("MESSAGE_NOT_FOUND");
     }
@@ -142,8 +149,11 @@ export const deleteMessageService = async (message_id, user_id) => {
 };
 
 export const markAsReadService = async (message_id, reader_id) => {
-    const message = await messageRepository.findByIdWithAccess(message_id, reader_id);
-    
+    const message = await messageRepository.findByIdWithAccess(
+        message_id,
+        reader_id
+    );
+
     if (!message) {
         throw new Error("MESSAGE_NOT_FOUND");
     }
@@ -170,7 +180,10 @@ export const getUnreadCountService = async (conversation_id, user_id) => {
         throw new Error("CONVERSATION_NOT_FOUND");
     }
 
-    const unread_count = await messageRepository.countUnread(conversation_id, user_id);
+    const unread_count = await messageRepository.countUnread(
+        conversation_id,
+        user_id
+    );
     return { unread_count };
 };
 
@@ -183,8 +196,14 @@ export const markAllAsReadService = async (conversation_id, user_id) => {
         throw new Error("CONVERSATION_NOT_FOUND");
     }
 
-    const result = await messageRepository.markAllAsRead(conversation_id, user_id);
-    const unread_count = await messageRepository.getUnreadCountAfterMark(conversation_id, user_id);
+    const result = await messageRepository.markAllAsRead(
+        conversation_id,
+        user_id
+    );
+    const unread_count = await messageRepository.getUnreadCountAfterMark(
+        conversation_id,
+        user_id
+    );
 
     return {
         marked_count: result.marked_count,

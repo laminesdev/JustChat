@@ -8,9 +8,13 @@ const app = express();
 const corsOptions = {
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
-        const allowedOrigins = ["http://localhost:5176"]; 
 
-        if (allowedOrigins.indexOf(origin) !== -1) {
+        const allowedOrigins = [
+            "http://localhost:5176",
+            process.env.CLIENT_URL,
+        ].filter(Boolean);
+
+        if (allowedOrigins.some((allowed) => origin.startsWith(allowed))) {
             callback(null, true);
         } else {
             console.log("Blocked by CORS:", origin);
@@ -24,9 +28,8 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: "10mb" }));
 
-// Parse JSON bodies
+// Parse JSON bodies - REMOVED DUPLICATE
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
